@@ -1,22 +1,15 @@
 import re
-import urllib.request
-import requests
 import sys
+import urllib
 
-basepath = 'downloads/'
-base_clip_path = 'https://clips-media-assets2.twitch.tv/'
+import requests
 
 
-def retrieve_mp4_data(slug):
-    cid = sys.argv[1]
-    clip_info = requests.get(
-        "https://api.twitch.tv/helix/clips?id=" + slug,
-        headers={"Client-ID": cid}).json()
-    thumb_url = clip_info['data'][0]['thumbnail_url']
-    title = clip_info['data'][0]['title']
-    slice_point = thumb_url.index("-preview-")
-    mp4_url = thumb_url[:slice_point] + '.mp4'
-    return mp4_url, title
+def get_clip(slug, client_id):
+    return requests.get(
+        f"https://api.twitch.tv/kraken/clips/{slug}",
+        headers={"Accept": "application/vnd.twitchtv.v5+json", "Client-ID": client_id,},
+    ).json()
 
 
 def dl_progress(count, block_size, total_size):
@@ -25,19 +18,24 @@ def dl_progress(count, block_size, total_size):
     sys.stdout.flush()
 
 
-# for each clip in clips.txt
-for clip in open('clips.txt', 'r'):
-    slug = clip.split('/')[3].replace('\n', '')
-    mp4_url, clip_title = retrieve_mp4_data(slug)
-    regex = re.compile('[^a-zA-Z0-9_]')
-    clip_title = clip_title.replace(' ', '_')
-    out_filename = regex.sub('', clip_title) + '.mp4'
-    output_path = (basepath + out_filename)
+client_id = sys.argv[1]
+bad_chars = re.compile("[^a-zA-Z0-9_]")
+download_path = "downloads/"
 
-    print('\nDownloading clip slug: ' + slug)
-    print('"' + clip_title + '" -> ' + out_filename)
+for slug in open("clips.txt", "r"):
+    slug = slug.strip()
+    clip = get_clip(slug, client_id)
+    mp4_url = clip["thumbnails"]["medium"].replace("-preview-480x272.jpg", ".mp4")
+    title = clip["title"]
+    out_filename = bad_chars.sub("", title).replace(" ", "_") + ".mp4"
+    output_path = download_path + out_filename
+
+    print(f"Downloading clip: {slug}")
+    print(f'"{title}" -> {out_filename}')
     print(mp4_url)
-    urllib.request.urlretrieve(mp4_url, output_path, reporthook=dl_progress)
-    print('\nDone.')
 
-print('Finished downloading all the videos.')
+    urllib.request.urlretrieve(mp4_url, output_path, reporthook=dl_progress)
+
+    print("\nDone.\n")
+
+print("Finished downloading all the videos.")
